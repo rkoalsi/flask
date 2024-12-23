@@ -7,6 +7,10 @@ app = Flask(__name__)
 app.logger.setLevel(logging.DEBUG)
 
 
+@app.route('/', methods=['GET'])
+def index():
+    return "Flask App is running successfully"
+
 @app.route('/hello', methods=['GET'])
 def hello_world():
     return {"data":"Hello, World!"}
