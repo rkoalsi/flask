@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
-from helpers import process_upload
 import logging, threading
+from helpers import process_upload
 
 
 app = Flask(__name__)
