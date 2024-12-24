@@ -1,19 +1,33 @@
-import io, re, requests
+import io, requests, os, smtplib
 import pandas as pd
 from functools import lru_cache
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
-from env import org_id, PURCHASE_ORDER_URL, PURCHASE_URL, ITEM_URL, INVENTORY_URL, BOOKS_URL,clientId,clientSecret, grantType,inventory_refresh_token, books_refresh_token
-import smtplib
+from dotenv import load_dotenv
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 from email.mime.text import MIMEText
+from dotenv import load_dotenv
 
-SMTP_SERVER = 'smtp.gmail.com'
+SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
-SENDER_EMAIL = 'useremailaddy78@gmail.com'  # Use your email
-SENDER_PASSWORD = 'nuymwywuhecelhho'  # Use your email app password
+SENDER_EMAIL = "useremailaddy78@gmail.com"  # Use your email
+SENDER_PASSWORD = "nuymwywuhecelhho"  # Use your email app password
+
+
+load_dotenv()
+org_id = os.getenv("ORG_ID")
+PURCHASE_ORDER_URL = os.getenv("PURCHASE_ORDER_URL")
+PURCHASE_URL = os.getenv("PURCHASE_URL")
+ITEM_URL = os.getenv("ITEM_URL")
+INVENTORY_URL = os.getenv("INVENTORY_URL")
+BOOKS_URL = os.getenv("BOOKS_URL")
+clientId = os.getenv("CLIENT_ID")
+clientSecret = os.getenv("CLIENT_SECRET")
+grantType = os.getenv("GRANT_TYPE")
+inventory_refresh_token = os.getenv("INVENTORY_REFRESH_TOKEN")
+books_refresh_token = os.getenv("BOOKS_REFRESH_TOKEN")
 
 
 def validate_file(file) -> dict:
@@ -29,51 +43,45 @@ def validate_file(file) -> dict:
     try:
         # Load the workbook from the file
         wb = load_workbook(file)
-        
+
         # Get all sheet names
         sheet_names = wb.sheetnames
-        
+
         # Check if both 'PL' and 'CI' sheets are present
-        if 'PL' not in sheet_names or 'CI' not in sheet_names:
+        if "PL" not in sheet_names or "CI" not in sheet_names:
             missing_sheets = []
-            if 'PL' not in sheet_names:
-                missing_sheets.append('PL')
-            if 'CI' not in sheet_names:
-                missing_sheets.append('CI')
-            
+            if "PL" not in sheet_names:
+                missing_sheets.append("PL")
+            if "CI" not in sheet_names:
+                missing_sheets.append("CI")
+
             # Return an error response if any sheet is missing
             return {
-                'status': 'error',
-                'message': f"Missing sheets: {', '.join(missing_sheets)}"
+                "status": "error",
+                "message": f"Missing sheets: {', '.join(missing_sheets)}",
             }
 
         # If both sheets are found, return a success response
-        return {
-            'status': 'success',
-            'message': 'Both PL and CI sheets are present.'
-        }
+        return {"status": "success", "message": "Both PL and CI sheets are present."}
 
     except Exception as e:
         # Handle any other errors (e.g., invalid file format)
-        return {
-            'status': 'error',
-            'message': f"An error occurred: {str(e)}"
-        }
+        return {"status": "error", "message": f"An error occurred: {str(e)}"}
 
 
 def send_email_with_attachments_in_memory(workbook, subject, body, filename, email):
     """Send email with multiple in-memory attachments."""
     msg = MIMEMultipart()
-    msg['From'] = SENDER_EMAIL
-    msg['To'] = email
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'plain'))
+    msg["From"] = SENDER_EMAIL
+    msg["To"] = email
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
 
     # Attach each in-memory workbook
-    part = MIMEBase('application', 'octet-stream')
+    part = MIMEBase("application", "octet-stream")
     part.set_payload(workbook)
     encoders.encode_base64(part)
-    part.add_header('Content-Disposition', f'attachment; filename="{filename}.xlsx"')
+    part.add_header("Content-Disposition", f'attachment; filename="{filename}.xlsx"')
     msg.attach(part)
 
     # Send the email
@@ -86,6 +94,7 @@ def send_email_with_attachments_in_memory(workbook, subject, body, filename, ema
         print(f"Email sent to {email} with in-memory attachments.")
     except Exception as e:
         print(f"Failed to send email: {e}")
+
 
 def get_access_token(tkn: str):
     r = None
@@ -116,11 +125,10 @@ def get_access_token(tkn: str):
     return access_token
 
 
-
-
 access_token = get_access_token("books")
 headers = {"Authorization": f"Zoho-oauthtoken {access_token}"}
 company_name = "Pettingzoo"
+
 
 def save_combined_sheet(matched_ci, unmatched_ci, matched_pl, unmatched_pl):
     """
@@ -143,7 +151,7 @@ def save_combined_sheet(matched_ci, unmatched_ci, matched_pl, unmatched_pl):
         # Sheet 1: Write matched and unmatched CI data
         ws1 = wb.active
         ws1.title = "CI Data"
-        
+
         # Add "Matched CI" title
         ws1.append(["Matched CI"])
         for row in dataframe_to_rows(matched_ci, index=None, header=True):
@@ -190,6 +198,7 @@ def save_combined_sheet(matched_ci, unmatched_ci, matched_pl, unmatched_pl):
         print(f"Error saving combined sheet: {e}")
         return None
 
+
 @lru_cache(maxsize=None)
 def compare_strings(s1, s2):
     # remove whitespace, double spaces, hypens and brackets
@@ -201,13 +210,14 @@ def compare_strings(s1, s2):
     else:
         return False
 
-def extract_table_data(file_path, sheet_name, start_row=17):
+
+def extract_table_data(file_path, sheet_name):
     """
     Extracts table data from a given sheet using pandas.
     Assumes that the table starts after the specified start_row.
     """
     # Read the sheet starting from the specified row
-    df = pd.read_excel(file_path, sheet_name=sheet_name, header=start_row,  engine='openpyxl')
+    df = pd.read_excel(file_path, sheet_name=sheet_name)
     # Drop rows that are entirely NaN
     df = df.dropna(how="all")
 
@@ -216,20 +226,6 @@ def extract_table_data(file_path, sheet_name, start_row=17):
 
     return df
 
-def is_valid_name(name):
-    """
-    Checks if the name is valid.
-    A valid name is a string that does not resemble unwanted formats such as
-    mostly uppercase letters, special characters, or alphanumeric codes.
-    """
-    # Exclude strings that are all uppercase or contain patterns like "B4321/D1"
-    if not isinstance(name, str):
-        return False
-    if re.match(
-        r"^[A-Z0-9/\-*\s()]+$", name
-    ):  # Matches uppercase letters, digits, special chars
-        return False
-    return True
 
 def get_purchase_orders(items):
     po = []
@@ -241,11 +237,25 @@ def get_purchase_orders(items):
     has_more_pages = bool(p.json()["page_context"]["has_more_page"])
     if has_more_pages:
         print("Purchase orders have More Pages")
+        page = 2
+        while True:
+            p = requests.get(
+                url=PURCHASE_URL.format(
+                    org_id=org_id, search_text=company_name, page=page
+                ),
+                headers=headers,
+            )
+            response = p.json()
+            po.extend([x for x in p.json()["purchaseorders"] if x["status"] != "draft"])
+            has_more = bool(p.json()["page_context"]["has_more_page"])
+            page += 1
+            if not has_more:
+                break
     else:
-        print('No More Purchase Orders')
+        print("No More Purchase Orders")
     found_items = []
     found_names = set()  # Use a set for quick lookups
-    print('Processing POs')
+    print("Processing POs")
     # Process each purchase order
     for purchase_order in po:
         po_id = purchase_order.get("purchaseorder_id")
@@ -277,96 +287,33 @@ def get_purchase_orders(items):
     for item in items:
         if item["name"] not in found_names:
             found_items.append({"rate": 0, "name": item["name"]})
+    print("Done Processing POs")
     return found_items
 
-# def get_purchase_orders(items):
-#     print('Fetching Purchase Orders')
-#     po = []
-#     page=1
-#     print('Checking Further Purchase Orders')
-#     # Loop until there are no more pages
-#     while True:
-#         # Make the API request
-#         response = requests.get(
-#         url=PURCHASE_URL.format(
-#             org_id=org_id, search_text=company_name, page=page
-#         ),
-#         headers=headers,
-#         )
-
-#         # Parse the JSON response
-#         data = response.json()
-
-#         # Extract purchase orders that are not in 'draft' status
-#         po.extend([x for x in data["purchaseorders"] if x["status"] != "draft"])
-
-#         # Check if there are more pages
-#         has_more_pages = data["page_context"]["has_more_page"]
-#         if has_more_pages:
-#             print(f"Processing page {page}, more pages available...")
-#             page += 1  # Increment the page number
-#         else:
-#             print("No more pages.")
-#             break  # Exit the loop
-#     found_items = []
-#     found_names = set()  # Use a set for quick lookups
-
-#     # Process each purchase order
-#     for purchase_order in po:
-#         po_id = purchase_order.get("purchaseorder_id")
-#         if not po_id:
-#             continue  # Skip if purchaseorder_id is missing
-#         # Fetch detailed purchase order items
-#         response = requests.get(
-#             url=PURCHASE_ORDER_URL.format(org_id=org_id, purchase_order_id=po_id),
-#             headers=headers,
-#         )
-#         purchase_order_items = (
-#             response.json().get("purchaseorder", {}).get("line_items", [])
-#         )
-
-#         # Check for matching items in line_items
-#         for item in items:
-#             for line_item in purchase_order_items:
-#                 item_name = line_item.get("name")
-#                 rate = line_item.get("rate")
-
-#                 if (
-#                     compare_strings(item_name, item["name"])
-#                     and item_name not in found_names
-#                 ):
-#                     found_items.append({"rate": rate, "name": item_name})
-#                     found_names.add(item_name)
-#                     break
-#         for item in items:
-#             if item["name"] not in found_names:
-#                 found_items.append({"rate": 0, "name": item["name"]})
-#     return found_items
 
 def process_upload(input_file, email):
     # Extract table data from both sheets
     input_file.seek(0)
     input_file = io.BytesIO(input_file.read())
-    pl_sheet = extract_table_data(input_file, "PL")
-    ci_sheet = extract_table_data(input_file, "CI", start_row=16)
 
-    pl_data = [
-        x.replace("\n", "").strip() for x in pl_sheet["DESCRIPTION"] if is_valid_name(x)
-    ]
+    pl_sheet = extract_table_data(input_file, "PL")
+    ci_sheet = extract_table_data(input_file, "CI")
+    print(len(pl_sheet["Name"]))
+    pl_data = [x for x in pl_sheet["Name"]]
 
     ci_data = [
         {
-            "name": row["DESCRIPTION"].replace("\n", "").strip(),
-            "hsn": str(int(row["HSN "])),
-            "price": row[" Unit Price"],
+            "name": row["Name"],
+            "hsn": str(int(row["HSN"])),
+            "price": row["Price"],
         }
         for _, row in ci_sheet.iterrows()
-        if isinstance(row["DESCRIPTION"], str) and is_valid_name(row['DESCRIPTION'])
+        if isinstance(row["Name"], str)
     ]
     # Check if data is matching with the data on zoho and print a list of all found items, and not found items
     matched_pl, unmatched_pl, matched_ci, unmatched_ci = [], [], [], []
     data = get_purchase_orders(ci_data)
-    print('Processing PL Data')
+    print("Processing PL Data", len(pl_data))
     # fetch all items from PL sheet on zoho
     for item in pl_data:
         x = requests.get(
@@ -380,11 +327,10 @@ def process_upload(input_file, email):
                 matched_pl.append({"name": product_name})
             else:
                 unmatched_pl.append({"name": product_name})
-    print('Done Processing PL Data')
-    print('Processing CI Data')
+    print("Done Processing PL Data")
+    print("Processing CI Data", len(ci_data))
     for item in ci_data:
         name = item.get("name")
-        print(name)
         code = item.get("hsn")
         price = item.get("price")
         x = requests.get(
@@ -444,16 +390,16 @@ def process_upload(input_file, email):
                 }
             )
 
-    print('Done Processing CI Data')
+    print("Done Processing CI Data")
 
     matched_pl_df = pd.DataFrame(sorted(matched_pl, key=lambda x: str(x["name"])))
     unmatched_pl_df = pd.DataFrame(sorted(unmatched_pl, key=lambda x: str(x["name"])))
     matched_ci_df = pd.DataFrame(sorted(matched_ci, key=lambda x: int(x["hsn"])))
     unmatched_ci_df = pd.DataFrame(sorted(unmatched_ci, key=lambda x: int(x["hsn"])))
 
-    workbook = save_combined_sheet(matched_ci_df, unmatched_ci_df, matched_pl_df, unmatched_pl_df)
-
-    print("Saved to files")
+    workbook = save_combined_sheet(
+        matched_ci_df, unmatched_ci_df, matched_pl_df, unmatched_pl_df
+    )
     filename = "CI & PL Data"
     subject = "CI & PL Workbook"
     body = "Please find the attached CI and PL verification files."
