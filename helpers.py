@@ -1,4 +1,4 @@
-import io, re, requests
+import io, re, requests, openpyxl
 import pandas as pd
 from functools import lru_cache
 from openpyxl import Workbook
@@ -15,15 +15,60 @@ SMTP_PORT = 587
 SENDER_EMAIL = 'useremailaddy78@gmail.com'  # Use your email
 SENDER_PASSWORD = 'nuymwywuhecelhho'  # Use your email app password
 
-def send_email_with_attachment_in_memory(workbook, subject, body, filename, email):
-    """Send email with in-memory attachment."""
+def validate_file(file) -> dict:
+    """
+    Checks if the given Excel file contains both 'PL' and 'CI' sheets.
+
+    Args:
+        file (BytesIO): In-memory file data (from form data).
+
+    Returns:
+        dict: Response indicating whether the required sheets are present or not.
+    """
+    try:
+        # Load the workbook from the file
+        wb = openpyxl.load_workbook(file)
+        
+        # Get all sheet names
+        sheet_names = wb.sheetnames
+        
+        # Check if both 'PL' and 'CI' sheets are present
+        if 'PL' not in sheet_names or 'CI' not in sheet_names:
+            missing_sheets = []
+            if 'PL' not in sheet_names:
+                missing_sheets.append('PL')
+            if 'CI' not in sheet_names:
+                missing_sheets.append('CI')
+            
+            # Return an error response if any sheet is missing
+            return {
+                'status': 'error',
+                'message': f"Missing sheets: {', '.join(missing_sheets)}"
+            }
+
+        # If both sheets are found, return a success response
+        return {
+            'status': 'success',
+            'message': 'Both PL and CI sheets are present.'
+        }
+
+    except Exception as e:
+        # Handle any other errors (e.g., invalid file format)
+        return {
+            'status': 'error',
+            'message': f"An error occurred: {str(e)}"
+        }
+
+
+def send_email_with_attachments_in_memory(workbook, subject, body, filename, email):
+    """Send email with multiple in-memory attachments."""
     msg = MIMEMultipart()
     msg['From'] = SENDER_EMAIL
     msg['To'] = email
     msg['Subject'] = subject
     msg.attach(MIMEText(body, 'plain'))
 
-    # Attach the in-memory file
+    # Attach each in-memory workbook
     part = MIMEBase('application', 'octet-stream')
     part.set_payload(workbook)
     encoders.encode_base64(part)
@@ -37,7 +82,7 @@ def send_email_with_attachment_in_memory(workbook, subject, body, filename, emai
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
         server.sendmail(SENDER_EMAIL, email, msg.as_string())
         server.quit()
-        print(f"Email sent to {email} with in-memory attachment.")
+        print(f"Email sent to {email} with in-memory attachments.")
     except Exception as e:
         print(f"Failed to send email: {e}")
 
@@ -383,10 +428,11 @@ def process_upload(input_file, email):
     matched_ci_df = pd.DataFrame(sorted(matched_ci, key=lambda x: int(x["hsn"])))
     unmatched_ci_df = pd.DataFrame(sorted(unmatched_ci, key=lambda x: int(x["hsn"])))
 
-    combined_data1 = save_combined_sheet(matched_ci_df, unmatched_ci_df)
-    combined_data2 = save_combined_sheet(matched_pl_df, unmatched_pl_df)
+    workbook = save_combined_sheet(matched_ci_df, unmatched_ci_df, matched_pl_df, unmatched_pl_df)
 
     print("Saved to files")
-    send_email_with_attachment_in_memory(combined_data1, "CI Data", "The CI Verification has completed, please find the xlsx file attached below", "CI Data", email)
-    send_email_with_attachment_in_memory(combined_data2, "PL Data", "The PL Verification has completed, please find the xlsx file attached below", "PL Data", email)
+    filename = "CI & PL Data"
+    subject = "CI & PL Workbook"
+    body = "Please find the attached CI and PL verification files."
+    send_email_with_attachments_in_memory(workbook, subject, body, filename, email)
     return 1
