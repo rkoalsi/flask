@@ -35,7 +35,7 @@ def upload_file():
         threading.Thread(target=process_upload, args=(file,email)).start()
 
         # Return a response immediately
-        return {'message': f'Processing started. An email will be sent to {email} once the task is completed.'}
+        return {'message': f'Processing started.\nAn email will be sent to {email} once the task is completed.'}
 
     except Exception as e:
         return {'error': f'Error processing file: {e}'}, 500
