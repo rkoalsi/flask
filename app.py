@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 import logging, threading
-from helpers import process_upload
+from helpers import process_upload, validate_file
 
 
 app = Flask(__name__)
@@ -25,7 +25,11 @@ def upload_file():
     file = request.files['file']
     if file.filename == '':
         return {'error': 'No selected file'}, 400
-
+    r = validate_file(file)
+    status = r.get('status')
+    message = r.get('message')
+    if (status=='error'):
+        return {'message': f'Error in file uploaded, {message}'}, 400
     try:
         # Start processing in a separate thread
         threading.Thread(target=process_upload, args=(file,email)).start()
