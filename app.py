@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
-import logging, threading
 from helpers import process_upload, validate_file
+import logging, threading
 
 
 app = Flask(__name__)
@@ -35,7 +35,7 @@ def upload_file():
         threading.Thread(target=process_upload, args=(file,email)).start()
 
         # Return a response immediately
-        return {'message': 'Processing started. You will be emailed once the task is completed.'}
+        return {'message': f'Processing started. An email will be sent to {email} once the task is completed.'}
 
     except Exception as e:
         return {'error': f'Error processing file: {e}'}, 500

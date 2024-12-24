@@ -1,7 +1,7 @@
-import io, re, requests, openpyxl
+import io, re, requests
 import pandas as pd
 from functools import lru_cache
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 from env import org_id, PURCHASE_ORDER_URL, PURCHASE_URL, ITEM_URL, INVENTORY_URL, BOOKS_URL,clientId,clientSecret, grantType,inventory_refresh_token, books_refresh_token
 import smtplib
@@ -15,6 +15,7 @@ SMTP_PORT = 587
 SENDER_EMAIL = 'useremailaddy78@gmail.com'  # Use your email
 SENDER_PASSWORD = 'nuymwywuhecelhho'  # Use your email app password
 
+
 def validate_file(file) -> dict:
     """
     Checks if the given Excel file contains both 'PL' and 'CI' sheets.
@@ -27,7 +28,7 @@ def validate_file(file) -> dict:
     """
     try:
         # Load the workbook from the file
-        wb = openpyxl.load_workbook(file)
+        wb = load_workbook(file)
         
         # Get all sheet names
         sheet_names = wb.sheetnames
@@ -121,52 +122,73 @@ access_token = get_access_token("books")
 headers = {"Authorization": f"Zoho-oauthtoken {access_token}"}
 company_name = "Pettingzoo"
 
-def save_combined_sheet(matched_ci, unmatched_ci):
-  """
-  Saves matched and unmatched data to a combined Excel file in memory.
+def save_combined_sheet(matched_ci, unmatched_ci, matched_pl, unmatched_pl):
+    """
+    Saves four DataFrames to two sheets in a combined Excel file in memory.
 
-  Args:
-      matched_ci (pandas.DataFrame): DataFrame containing matched data.
-      unmatched_ci (pandas.DataFrame): DataFrame containing unmatched data.
+    Args:
+        matched_ci (pandas.DataFrame): DataFrame containing matched CI data.
+        unmatched_ci (pandas.DataFrame): DataFrame containing unmatched CI data.
+        matched_pl (pandas.DataFrame): DataFrame containing matched PL data.
+        unmatched_pl (pandas.DataFrame): DataFrame containing unmatched PL data.
 
-  Returns:
-      bytes: The combined Excel file content in memory.
-  """
+    Returns:
+        bytes: The combined Excel file content in memory.
+    """
 
-  try:
-    # Create a workbook and select the active worksheet
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Combined Data"
+    try:
+        # Create a workbook
+        wb = Workbook()
 
-    # Add "Matched" title
-    ws.append(["Matched"])
-    for row in dataframe_to_rows(matched_ci, index=None, header=True):
-        ws.append(row)
+        # Sheet 1: Write matched and unmatched CI data
+        ws1 = wb.active
+        ws1.title = "CI Data"
+        
+        # Add "Matched CI" title
+        ws1.append(["Matched CI"])
+        for row in dataframe_to_rows(matched_ci, index=None, header=True):
+            ws1.append(row)
 
-    # Add a gap of two rows
-    ws.append([])
-    ws.append([])
+        # Add a gap of two rows
+        ws1.append([])
+        ws1.append([])
 
-    # Add "Unmatched" title
-    ws.append(["Unmatched"])
-    for row in dataframe_to_rows(unmatched_ci, index=None, header=True):
-        ws.append(row)
+        # Add "Unmatched CI" title
+        ws1.append(["Unmatched CI"])
+        for row in dataframe_to_rows(unmatched_ci, index=None, header=True):
+            ws1.append(row)
 
-    # Create an in-memory buffer
-    output_buffer = io.BytesIO()
+        # Sheet 2: Write matched and unmatched PL data
+        ws2 = wb.create_sheet(title="PL Data")
 
-    # Save the workbook to the buffer
-    wb.save(output_buffer)
+        # Add "Matched PL" title
+        ws2.append(["Matched PL"])
+        for row in dataframe_to_rows(matched_pl, index=None, header=True):
+            ws2.append(row)
 
-    # Reset the buffer position to the beginning
-    output_buffer.seek(0)
+        # Add a gap of two rows
+        ws2.append([])
+        ws2.append([])
 
-    return output_buffer.getvalue()
+        # Add "Unmatched PL" title
+        ws2.append(["Unmatched PL"])
+        for row in dataframe_to_rows(unmatched_pl, index=None, header=True):
+            ws2.append(row)
 
-  except Exception as e:
-    print(f"Error saving combined sheet: {e}")
-    return None
+        # Create an in-memory buffer
+        output_buffer = io.BytesIO()
+
+        # Save the workbook to the buffer
+        wb.save(output_buffer)
+
+        # Reset the buffer position to the beginning
+        output_buffer.seek(0)
+
+        return output_buffer.getvalue()
+
+    except Exception as e:
+        print(f"Error saving combined sheet: {e}")
+        return None
 
 @lru_cache(maxsize=None)
 def compare_strings(s1, s2):
@@ -185,7 +207,7 @@ def extract_table_data(file_path, sheet_name, start_row=17):
     Assumes that the table starts after the specified start_row.
     """
     # Read the sheet starting from the specified row
-    df = pd.read_excel(file_path, sheet_name=sheet_name, header=start_row)
+    df = pd.read_excel(file_path, sheet_name=sheet_name, header=start_row,  engine='openpyxl')
     # Drop rows that are entirely NaN
     df = df.dropna(how="all")
 
@@ -323,6 +345,7 @@ def get_purchase_orders(items):
 
 def process_upload(input_file, email):
     # Extract table data from both sheets
+    input_file.seek(0)
     input_file = io.BytesIO(input_file.read())
     pl_sheet = extract_table_data(input_file, "PL")
     ci_sheet = extract_table_data(input_file, "CI", start_row=16)
