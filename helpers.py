@@ -1,4 +1,4 @@
-import io, requests, os, smtplib
+import io, requests, os, smtplib, re
 import pandas as pd
 from functools import lru_cache
 from openpyxl import Workbook, load_workbook
@@ -292,12 +292,23 @@ def get_purchase_orders(items):
 
 
 def process_upload(input_file, email):
+    # Preprocessing function to remove "cm" and "inch"
+    def clean_name(name):
+        return re.sub(
+            r"\\b\\d+(?:\\.\\d+)?\\s*(?:cm|inch)\\b", "", name, flags=re.IGNORECASE
+        ).strip()
+
     # Extract table data from both sheets
     input_file.seek(0)
     input_file = io.BytesIO(input_file.read())
 
     pl_sheet = extract_table_data(input_file, "PL")
     ci_sheet = extract_table_data(input_file, "CI")
+
+    # Clean "Name" column in both sheets
+    pl_sheet["Name"] = pl_sheet["Name"].apply(clean_name)
+    ci_sheet["Name"] = ci_sheet["Name"].apply(clean_name)
+
     print(len(pl_sheet["Name"]))
     pl_data = [x for x in pl_sheet["Name"]]
 
@@ -310,11 +321,13 @@ def process_upload(input_file, email):
         for _, row in ci_sheet.iterrows()
         if isinstance(row["Name"], str)
     ]
-    # Check if data is matching with the data on zoho and print a list of all found items, and not found items
+
+    # Check if data is matching with the data on Zoho and print a list of all found and not found items
     matched_pl, unmatched_pl, matched_ci, unmatched_ci = [], [], [], []
     data = get_purchase_orders(ci_data)
+
     print("Processing PL Data", len(pl_data))
-    # fetch all items from PL sheet on zoho
+    # Fetch all items from PL sheet on Zoho
     for item in pl_data:
         x = requests.get(
             url=ITEM_URL.format(org_id=org_id, search_text=item), headers=headers
@@ -327,6 +340,7 @@ def process_upload(input_file, email):
                 matched_pl.append({"name": product_name})
             else:
                 unmatched_pl.append({"name": product_name})
+
     print("Done Processing PL Data")
     print("Processing CI Data", len(ci_data))
     for item in ci_data:
@@ -380,7 +394,7 @@ def process_upload(input_file, email):
                     }
                 )
         else:
-            reason = f"{name} Not found in zoho"
+            reason = f"{name} Not found in Zoho"
             unmatched_ci.append(
                 {
                     "name": name,
